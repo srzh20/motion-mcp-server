@@ -133,6 +133,8 @@ export class TaskHandler extends BaseHandler {
           return await this.handleUnassign(params as UnassignTaskParams);
         case 'list_all_uncompleted':
           return await this.handleListAllUncompleted(params as ListAllUncompletedParams);
+        case 'get_raw':
+          return await this.handleGetRaw(params as GetTaskParams);
         default:
           return this.handleUnknownOperation(operation);
       }
@@ -353,6 +355,16 @@ export class TaskHandler extends BaseHandler {
 
     const taskDetails = await this.motionService.getTask(params.taskId);
     return formatTaskDetail(taskDetails);
+  }
+
+  // Temporary diagnostic: returns the raw JSON the Motion API sent for a task,
+  // so we can discover undocumented fields. Remove after the discovery pass.
+  private async handleGetRaw(params: GetTaskParams): Promise<McpToolResponse> {
+    if (!params.taskId) {
+      return this.handleError(new Error("Task ID is required for get_raw operation"));
+    }
+    const raw = await this.motionService.getTask(params.taskId);
+    return formatMcpSuccess(JSON.stringify(raw, null, 2));
   }
 
   /**
