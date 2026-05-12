@@ -126,6 +126,43 @@ export function sanitizeDescription(description: string | undefined | null): str
 }
 
 /**
+ * Render a Motion task/project description (tiptap-style HTML) as plain text
+ * with markdown checkboxes preserved.
+ *
+ * Motion stores descriptions as HTML. A bare strip-tags pass loses the
+ * checked/unchecked state of `<li data-type="taskItem">` items. We rewrite
+ * those to `- [x]` / `- [ ]`, regular `<li>` to `- `, paragraphs/breaks to
+ * newlines, and headings to `# ` before falling back to the generic
+ * sanitizeTextContent pass for everything else.
+ */
+export function htmlDescriptionToMarkdown(html: string | undefined | null): string {
+  if (!html || typeof html !== 'string') return '';
+
+  let s = html;
+
+  // Tiptap task items — preserve checkbox state. Attribute order varies, so
+  // detect data-checked on the whole match rather than positionally.
+  s = s.replace(
+    /<li\b[^>]*\bdata-type="taskItem"[^>]*>[\s\S]*?<p\b[^>]*>([\s\S]*?)<\/p>[\s\S]*?<\/li>/gi,
+    (match, text) => {
+      const checked = /data-checked="true"/i.test(match);
+      return `\n- ${checked ? '[x]' : '[ ]'} ${text}`;
+    },
+  );
+
+  // Plain list items
+  s = s.replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
+
+  // Headings
+  s = s.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level, text) => `\n${'#'.repeat(Number(level))} ${text}\n`);
+
+  // Paragraph breaks and explicit <br>
+  s = s.replace(/<\/p>/gi, '\n').replace(/<br\s*\/?>/gi, '\n');
+
+  return sanitizeTextContent(s);
+}
+
+/**
  * Sanitize task/project name content
  * Names are required and must be non-empty after sanitization
  * 

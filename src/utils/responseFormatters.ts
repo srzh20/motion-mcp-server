@@ -11,7 +11,7 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { MotionProject, MotionTask, MotionWorkspace, MotionComment, MotionCustomField, MotionCustomFieldValue, MotionRecurringTask, MotionSchedule, MotionScheduleDetails, MotionStatus } from '../types/motion';
 import { TruncationInfo } from '../types/mcp';
 import { LIMITS } from './constants';
-import { sanitizeTextContent } from './sanitize';
+import { htmlDescriptionToMarkdown } from './sanitize';
 
 const DESCRIPTION_MAX_CHARS = 500;
 
@@ -24,6 +24,18 @@ function formatShortSchedule(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// Earliest uncompleted chunk start — Motion's top-level scheduledStart can be
+// null for tasks that are split across multiple chunks, so list view needs a
+// fallback for "when does work on this resume."
+function earliestUpcomingChunk(task: MotionTask): string | undefined {
+  if (!task.chunks?.length) return undefined;
+  const upcoming = task.chunks
+    .filter(c => !c.completedTime && c.scheduledStart)
+    .map(c => c.scheduledStart)
+    .sort();
+  return upcoming[0];
 }
 
 const TRUNCATION_REASON_MESSAGES: Record<string, string> = {
@@ -143,7 +155,12 @@ export function formatTaskList(
       const dueDate = new Date(task.dueDate).toLocaleDateString();
       line += ` (Due: ${dueDate})`;
     }
-    if (task.scheduledStart) line += ` (Scheduled: ${formatShortSchedule(task.scheduledStart)})`;
+    if (task.scheduledStart) {
+      line += ` (Scheduled: ${formatShortSchedule(task.scheduledStart)})`;
+    } else {
+      const next = earliestUpcomingChunk(task);
+      if (next) line += ` (Next chunk: ${formatShortSchedule(next)})`;
+    }
     if (task.schedulingIssue) line += ' (SCHEDULING ISSUE)';
     return line;
   };
@@ -227,10 +244,15 @@ export function formatDetailResponse<T extends Record<string, any>>(
  * Format single task detail response with comprehensive information
  */
 export function formatTaskDetail(task: MotionTask): CallToolResult {
-  const rawDescription = task.description ? sanitizeTextContent(task.description) : '';
+  const rawDescription = task.description ? htmlDescriptionToMarkdown(task.description) : '';
   const description = rawDescription.length > DESCRIPTION_MAX_CHARS
     ? rawDescription.slice(0, DESCRIPTION_MAX_CHARS).trimEnd() + '…'
     : rawDescription;
+
+  const workspaceStatuses = task.workspace?.statuses?.map(s => s.name).join(', ') || '';
+  const workspaceLabels = task.workspace?.labels
+    ?.map(l => typeof l === 'string' ? l : l.name)
+    .join(', ') || '';
 
   const formatChunk = (c: NonNullable<MotionTask['chunks']>[number]) => {
     const start = new Date(c.scheduledStart).toLocaleString();
@@ -266,7 +288,9 @@ export function formatTaskDetail(task: MotionTask): CallToolResult {
     task.updatedTime ? `Last Updated: ${new Date(task.updatedTime).toLocaleString()}` : null,
     task.lastInteractedTime ? `Last Interacted: ${new Date(task.lastInteractedTime).toLocaleString()}` : null,
     task.completedTime ? `Completed At: ${new Date(task.completedTime).toLocaleString()}` : null,
-    `Workspace: ${task.workspace?.name || 'Unknown'} (${task.workspace?.id || 'N/A'})`,
+    `Workspace: ${task.workspace?.name || 'Unknown'} (${task.workspace?.id || 'N/A'})${task.workspace?.teamId ? '' : ' [individual]'}`,
+    workspaceStatuses ? `Valid Statuses: ${workspaceStatuses}` : null,
+    workspaceLabels ? `Workspace Labels: ${workspaceLabels}` : null,
     task.project ? `Project: ${task.project.name} (${task.project.id})` : 'Project: No project assigned',
     task.assignees && task.assignees.length > 0
       ? `Assignees: ${task.assignees.map(a => `${a.name} (${a.email})`).join(', ')}`

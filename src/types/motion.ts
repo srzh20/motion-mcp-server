@@ -176,6 +176,15 @@ export interface MotionTask {
     name: string;
     teamId: string | null;
     type: string;
+    // Motion's GET /tasks/{id} response embeds the full workspace, including
+    // the lists of statuses and labels defined in that workspace. Useful for
+    // discovering valid status/label values without a separate API call.
+    statuses?: Array<{
+      name: string;
+      isDefaultStatus: boolean;
+      isResolvedStatus: boolean;
+    }>;
+    labels?: Array<string | { name: string }>;
   };
 
   assignees?: Array<{

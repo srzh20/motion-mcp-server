@@ -55,18 +55,18 @@ export const projectsToolDefinition: McpToolDefinition = {
 
 export const tasksToolDefinition: McpToolDefinition = {
   name: TOOL_NAMES.TASKS,
-  description: "Manage Motion tasks - supports create, list, get, update, delete, move, unassign, and list_all_uncompleted operations. List responses include each task's auto-scheduled start time (scheduledStart) and a SCHEDULING ISSUE marker when Motion could not schedule it. Get responses additionally include the scheduled-chunk breakdown (each block's start/end/duration/isFixed/completedTime), description (HTML stripped, truncated at 500 chars), customFieldValues (field name and value), startOn, lastInteractedTime, completedTime, and parentRecurringTaskId. Temporary debug operation get_raw returns the unprocessed JSON the Motion API returned for a task — use this once to discover undocumented fields, then remove the operation.",
+  description: "Manage Motion tasks - supports create, list, get, update, delete, move, unassign, and list_all_uncompleted operations. List responses include each task's auto-scheduled start time (scheduledStart) and a SCHEDULING ISSUE marker when Motion could not schedule it. Get responses additionally include the scheduled-chunk breakdown (each block's start/end/duration/isFixed/completedTime), description (HTML stripped, truncated at 500 chars), customFieldValues (field name and value), startOn, lastInteractedTime, completedTime, parentRecurringTaskId, the workspace's valid statuses and label list (useful before an update), and descriptions converted from Motion's HTML to markdown (preserving tiptap task-list checkbox state as `- [x]` / `- [ ]`). List responses fall back to the next uncompleted chunk's start when the top-level scheduledStart is null.",
   inputSchema: {
     type: "object",
     properties: {
       operation: {
         type: "string",
-        enum: ["create", "list", "get", "update", "delete", "move", "unassign", "list_all_uncompleted", "get_raw"],
+        enum: ["create", "list", "get", "update", "delete", "move", "unassign", "list_all_uncompleted"],
         description: "Operation to perform"
       },
       taskId: {
         type: "string",
-        description: "Task ID (required for get/update/delete/move/unassign/get_raw)"
+        description: "Task ID (required for get/update/delete/move/unassign)"
       },
       workspaceId: {
         type: "string",

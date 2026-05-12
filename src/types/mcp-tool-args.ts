@@ -15,7 +15,7 @@ export interface MotionProjectsArgs {
   allWorkspaces?: boolean;
 }
 
-export type TasksOperation = 'create' | 'list' | 'get' | 'update' | 'delete' | 'move' | 'unassign' | 'list_all_uncompleted' | 'get_raw';
+export type TasksOperation = 'create' | 'list' | 'get' | 'update' | 'delete' | 'move' | 'unassign' | 'list_all_uncompleted';
 
 export interface MotionTasksArgs {
   operation: TasksOperation;
