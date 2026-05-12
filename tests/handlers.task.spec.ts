@@ -1,0 +1,124 @@
+import { describe, it, expect, vi } from 'vitest';
+import { TaskHandler } from '../src/handlers';
+import type { HandlerContext } from '../src/handlers/base/HandlerInterface';
+
+function makeContext(overrides: Partial<HandlerContext> = {}): HandlerContext {
+  const motionService = {
+    createTask: vi.fn().mockResolvedValue({ id: 't1', name: 'Hello' }),
+    getTasks: vi.fn().mockResolvedValue({
+      items: [
+        { id: 't1', name: 'A' },
+        { id: 't2', name: 'B' },
+      ],
+      truncation: undefined,
+    }),
+    getTask: vi.fn().mockResolvedValue({ id: 't1', name: 'A' }),
+    updateTask: vi.fn().mockResolvedValue({ id: 't1', name: 'New' }),
+    deleteTask: vi.fn().mockResolvedValue(undefined),
+    moveTask: vi.fn().mockResolvedValue({ id: 't1', name: 'A' }),
+    unassignTask: vi.fn().mockResolvedValue({ id: 't1', name: 'A' }),
+  } as any;
+
+  const workspaceResolver = {
+    resolveWorkspace: vi.fn().mockResolvedValue({ id: 'w1', name: 'Dev' })
+  } as any;
+
+  const validator = {} as any;
+
+  return {
+    motionService,
+    workspaceResolver,
+    validator,
+    ...overrides,
+  } as HandlerContext;
+}
+
+describe('TaskHandler', () => {
+  it('creates a task using resolved workspace and normalizes due dates', async () => {
+    const ctx = makeContext();
+    const handler = new TaskHandler(ctx);
+    const res = await handler.handle({
+      operation: 'create',
+      name: 'Hello',
+      workspaceName: 'Dev',
+      dueDate: '2024-05-10'
+    } as any);
+
+    expect(ctx.workspaceResolver.resolveWorkspace).toHaveBeenCalled();
+    expect(ctx.motionService.createTask).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Hello',
+      workspaceId: 'w1',
+      dueDate: '2024-05-10T23:59:59.000Z'
+    }));
+
+    const text = (res.content?.[0] as any)?.text || '';
+    expect(text).toContain('Successfully created task');
+    expect(text).toContain('Hello');
+  });
+
+  it('lists tasks and formats response', async () => {
+    const ctx = makeContext();
+    const handler = new TaskHandler(ctx);
+    const res = await handler.handle({ operation: 'list', workspaceName: 'Dev', limit: 10 } as any);
+
+    expect(ctx.motionService.getTasks).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: 'w1',
+      limit: 10
+    }));
+    const text = (res.content?.[0] as any)?.text || '';
+    expect(text).toContain('Found 2 tasks');
+    expect(text).toContain('(ID: t1)');
+    expect(text).toContain('(ID: t2)');
+  });
+
+  it('updates a task, normalizes due dates, and returns success text', async () => {
+    const ctx = makeContext();
+    const handler = new TaskHandler(ctx);
+    const res = await handler.handle({
+      operation: 'update',
+      taskId: 't1',
+      name: 'New',
+      dueDate: '2024-06-01'
+    } as any);
+
+    expect(ctx.motionService.updateTask).toHaveBeenCalledWith('t1', expect.objectContaining({
+      name: 'New',
+      dueDate: '2024-06-01T23:59:59.000Z'
+    }));
+    const text = (res.content?.[0] as any)?.text || '';
+    expect(text).toContain('Successfully updated task');
+  });
+
+  it('returns error for invalid create duration strings', async () => {
+    const ctx = makeContext();
+    const handler = new TaskHandler(ctx);
+
+    const res = await handler.handle({
+      operation: 'create',
+      name: 'Hello',
+      workspaceName: 'Dev',
+      duration: '5 minutes'
+    } as any);
+
+    expect(res.isError).toBe(true);
+    expect(ctx.motionService.createTask).not.toHaveBeenCalled();
+    const text = (res.content?.[0] as any)?.text || '';
+    expect(text).toContain('Duration must be a non-negative integer');
+  });
+
+  it('returns error for invalid update duration strings', async () => {
+    const ctx = makeContext();
+    const handler = new TaskHandler(ctx);
+
+    const res = await handler.handle({
+      operation: 'update',
+      taskId: 't1',
+      duration: 'abc'
+    } as any);
+
+    expect(res.isError).toBe(true);
+    expect(ctx.motionService.updateTask).not.toHaveBeenCalled();
+    const text = (res.content?.[0] as any)?.text || '';
+    expect(text).toContain('Duration must be a non-negative integer');
+  });
+});
