@@ -53,7 +53,7 @@ export class MotionMCPAgent extends McpAgent<Env> {
 }
 
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // Health check endpoint
@@ -73,12 +73,69 @@ export default {
 
     // Rewrite path to strip the secret before passing to McpAgent
     // e.g., /mcp/SECRET -> /mcp, /mcp/SECRET/sse -> /mcp/sse
+    // Query string must be preserved so the SDK can read ?sessionId=... on POST.
     const cleanPath = "/mcp" + (pathParts.length > 2 ? "/" + pathParts.slice(2).join("/") : "");
-    const cleanUrl = new URL(cleanPath, url.origin);
+    const cleanUrl = new URL(cleanPath + url.search, url.origin);
     const cleanRequest = new Request(cleanUrl, request);
 
-    return (
+    const response = await (
       MotionMCPAgent.mount("/mcp") as { fetch: (req: Request, env: Env, ctx: ExecutionContext) => Promise<Response> }
     ).fetch(cleanRequest, env, ctx);
+
+    // The agents SDK's legacy SSE handler emits `data: /mcp/message?sessionId=...`
+    // based on its mount path. Clients POST that path verbatim, so the secret
+    // must be reinjected or the auth check above rejects every follow-up message.
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("text/event-stream") && response.body) {
+      return new Response(
+        injectSecretIntoSse(response.body, env.MOTION_MCP_SECRET),
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers: new Headers(response.headers),
+        }
+      );
+    }
+
+    return response;
   },
 };
+
+function injectSecretIntoSse(
+  body: ReadableStream<Uint8Array>,
+  secret: string,
+): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const replacement = `data: /mcp/${secret}/`;
+  let pending = "";
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (pending) controller.enqueue(encoder.encode(rewrite(pending, replacement)));
+            controller.close();
+            return;
+          }
+          pending += decoder.decode(value, { stream: true });
+          const lastNl = pending.lastIndexOf("\n");
+          if (lastNl >= 0) {
+            const ready = pending.slice(0, lastNl + 1);
+            pending = pending.slice(lastNl + 1);
+            controller.enqueue(encoder.encode(rewrite(ready, replacement)));
+          }
+        }
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+  });
+}
+
+function rewrite(chunk: string, replacement: string): string {
+  return chunk.replace(/^data:\s*\/mcp\//gm, replacement);
+}
