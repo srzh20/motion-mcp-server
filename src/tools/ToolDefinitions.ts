@@ -55,7 +55,7 @@ export const projectsToolDefinition: McpToolDefinition = {
 
 export const tasksToolDefinition: McpToolDefinition = {
   name: TOOL_NAMES.TASKS,
-  description: "Manage Motion tasks - supports create, list, get, update, delete, move, unassign, and list_all_uncompleted operations",
+  description: "Manage Motion tasks - supports create, list, get, update, delete, move, unassign, and list_all_uncompleted operations. List responses include each task's auto-scheduled start time (scheduledStart) and a SCHEDULING ISSUE marker when Motion could not schedule it. Get responses additionally include the scheduled-chunk breakdown (each block's start/end/duration/isFixed/completedTime), description (HTML stripped, truncated at 500 chars), customFieldValues (field name and value), startOn, lastInteractedTime, completedTime, and parentRecurringTaskId.",
   inputSchema: {
     type: "object",
     properties: {

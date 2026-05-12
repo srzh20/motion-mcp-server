@@ -11,6 +11,20 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { MotionProject, MotionTask, MotionWorkspace, MotionComment, MotionCustomField, MotionCustomFieldValue, MotionRecurringTask, MotionSchedule, MotionScheduleDetails, MotionStatus } from '../types/motion';
 import { TruncationInfo } from '../types/mcp';
 import { LIMITS } from './constants';
+import { sanitizeTextContent } from './sanitize';
+
+const DESCRIPTION_MAX_CHARS = 500;
+
+function formatShortSchedule(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 const TRUNCATION_REASON_MESSAGES: Record<string, string> = {
   page_size_limit: 'due to page size limits',
@@ -129,6 +143,8 @@ export function formatTaskList(
       const dueDate = new Date(task.dueDate).toLocaleDateString();
       line += ` (Due: ${dueDate})`;
     }
+    if (task.scheduledStart) line += ` (Scheduled: ${formatShortSchedule(task.scheduledStart)})`;
+    if (task.schedulingIssue) line += ' (SCHEDULING ISSUE)';
     return line;
   };
   
@@ -211,17 +227,45 @@ export function formatDetailResponse<T extends Record<string, any>>(
  * Format single task detail response with comprehensive information
  */
 export function formatTaskDetail(task: MotionTask): CallToolResult {
-  const details = [
+  const rawDescription = task.description ? sanitizeTextContent(task.description) : '';
+  const description = rawDescription.length > DESCRIPTION_MAX_CHARS
+    ? rawDescription.slice(0, DESCRIPTION_MAX_CHARS).trimEnd() + '…'
+    : rawDescription;
+
+  const formatChunk = (c: NonNullable<MotionTask['chunks']>[number]) => {
+    const start = new Date(c.scheduledStart).toLocaleString();
+    const end = new Date(c.scheduledEnd).toLocaleString();
+    const parts = [`${start} -> ${end}`, `${c.duration} min`];
+    if (c.isFixed) parts.push('fixed');
+    if (c.completedTime) parts.push(`completed ${new Date(c.completedTime).toLocaleString()}`);
+    return `  - ${parts.join(' | ')}`;
+  };
+
+  const formatCfv = (key: string, cfv: MotionCustomFieldValue) => {
+    let val: string;
+    if (cfv.value === null || cfv.value === undefined) val = '(empty)';
+    else if (typeof cfv.value === 'object') val = JSON.stringify(cfv.value);
+    else val = String(cfv.value);
+    return `  - ${key} [${cfv.type}]: ${val}`;
+  };
+
+  const details: (string | null)[] = [
     `Task: ${task.name}`,
     `ID: ${task.id}`,
-    task.description ? `Description: ${task.description}` : null,
+    task.schedulingIssue ? `*** SCHEDULING ISSUE — Motion could not auto-schedule this task ***` : null,
     `Status: ${typeof task.status === 'string' ? task.status : task.status?.name || 'Unknown'}`,
     `Priority: ${task.priority || 'Not set'}`,
     `Completed: ${task.completed ? 'Yes' : 'No'}`,
     task.dueDate ? `Due Date: ${new Date(task.dueDate).toLocaleString()}` : 'Due Date: Not set',
+    task.startOn ? `Start On: ${task.startOn}` : null,
+    task.scheduledStart ? `Scheduled Start: ${new Date(task.scheduledStart).toLocaleString()}` : null,
+    task.scheduledEnd ? `Scheduled End: ${new Date(task.scheduledEnd).toLocaleString()}` : null,
+    task.duration ? `Duration: ${typeof task.duration === 'number' ? `${task.duration} minutes` : task.duration}` : null,
+    task.deadlineType ? `Deadline Type: ${task.deadlineType}` : null,
     task.createdTime ? `Created: ${new Date(task.createdTime).toLocaleString()}` : null,
     task.updatedTime ? `Last Updated: ${new Date(task.updatedTime).toLocaleString()}` : null,
-    task.completedTime ? `Completed: ${new Date(task.completedTime).toLocaleString()}` : null,
+    task.lastInteractedTime ? `Last Interacted: ${new Date(task.lastInteractedTime).toLocaleString()}` : null,
+    task.completedTime ? `Completed At: ${new Date(task.completedTime).toLocaleString()}` : null,
     `Workspace: ${task.workspace?.name || 'Unknown'} (${task.workspace?.id || 'N/A'})`,
     task.project ? `Project: ${task.project.name} (${task.project.id})` : 'Project: No project assigned',
     task.assignees && task.assignees.length > 0
@@ -231,22 +275,17 @@ export function formatTaskDetail(task: MotionTask): CallToolResult {
     (task.labels && task.labels.length > 0)
       ? `Labels: ${task.labels.map(l => typeof l === 'string' ? l : l.name).join(', ')}`
       : null,
-    task.duration ? `Duration: ${typeof task.duration === 'number' ? `${task.duration} minutes` : task.duration}` : null,
-    task.deadlineType ? `Deadline Type: ${task.deadlineType}` : null,
-    task.scheduledStart ? `Scheduled Start: ${new Date(task.scheduledStart).toLocaleString()}` : null,
-    task.scheduledEnd ? `Scheduled End: ${new Date(task.scheduledEnd).toLocaleString()}` : null,
-    task.parentRecurringTaskId ? `Recurring Task ID: ${task.parentRecurringTaskId}` : null,
+    task.parentRecurringTaskId ? `Parent Recurring Task: ${task.parentRecurringTaskId}` : null,
+    description ? `\nDescription:\n${description}` : null,
     task.chunks && task.chunks.length > 0
-      ? `Scheduled Chunks: ${task.chunks.length} time block(s)`
+      ? `\nScheduled Chunks (${task.chunks.length}):\n${task.chunks.map(formatChunk).join('\n')}`
       : null,
     task.customFieldValues && Object.keys(task.customFieldValues).length > 0
-      ? `Custom Fields:\n${Object.entries(task.customFieldValues).map(([valueId, cfv]) =>
-          `  - valueId: ${valueId} | Type: ${cfv.type} | Value: ${JSON.stringify(cfv.value)}`
-        ).join('\n')}`
-      : null
-  ].filter(Boolean).join('\n');
+      ? `\nCustom Fields:\n${Object.entries(task.customFieldValues).map(([k, v]) => formatCfv(k, v)).join('\n')}`
+      : null,
+  ];
 
-  return formatMcpSuccess(details);
+  return formatMcpSuccess(details.filter(Boolean).join('\n'));
 }
 
 interface SearchOptions {
