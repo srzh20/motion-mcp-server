@@ -225,12 +225,35 @@ export interface MotionUser {
   email?: string;
 }
 
+export type MotionCustomFieldType =
+  | 'text' | 'url' | 'date' | 'person' | 'multiPerson'
+  | 'phone' | 'select' | 'multiSelect' | 'number'
+  | 'email' | 'checkbox' | 'relatedTo';
+
+export interface MotionCustomFieldOption {
+  id: string;
+  value: string;
+  color?: string;
+  deletedTime?: string | null;
+}
+
+export interface MotionCustomFieldDefinition {
+  id: string;
+  name: string;
+  workspaceId?: string;
+  type: MotionCustomFieldType;
+  metadata?: {
+    options?: MotionCustomFieldOption[];
+    [key: string]: unknown;
+  };
+}
+
+// Motion's GET /beta/workspaces/{id}/custom-fields returns a nested wrapper:
+// { id: 'cfi_...', field: { id, name, type, metadata: { options: [...] } } }
+// The outer id equals field.id (custom-field-instance ID).
 export interface MotionCustomField {
   id: string;
-  name?: string;
-  field: 'text' | 'url' | 'date' | 'person' | 'multiPerson' | 
-         'phone' | 'select' | 'multiSelect' | 'number' |
-         'email' | 'checkbox' | 'relatedTo';
+  field: MotionCustomFieldDefinition;
 }
 
 export interface CreateCustomFieldData {

@@ -6,10 +6,15 @@
 
 import { AxiosResponse, isAxiosError } from 'axios';
 import { MotionCustomField, MotionCustomFieldValue, CreateCustomFieldData } from '../../types/motion';
-import { LOG_LEVELS, createMinimalPayload } from '../../utils/constants';
+import { LOG_LEVELS, createMinimalPayload, MOTION_BASE_URLS } from '../../utils/constants';
 import { mcpLog } from '../../utils/logger';
 import { ResourceContext } from './types';
 import { getErrorMessage } from './ApiClient';
+
+// Beta endpoints (custom fields) live at https://api.usemotion.com/beta/...,
+// NOT under the /v1 prefix used by the axios client's default baseURL.
+// Override baseURL per request to avoid 404s.
+const BETA_REQUEST_CONFIG = { baseURL: MOTION_BASE_URLS.BETA } as const;
 
 export async function getCustomFields(ctx: ResourceContext, workspaceId: string): Promise<MotionCustomField[]> {
   const cacheKey = `custom-fields:${workspaceId}`;
@@ -23,7 +28,7 @@ export async function getCustomFields(ctx: ResourceContext, workspaceId: string)
 
       const url = `/beta/workspaces/${workspaceId}/custom-fields`;
 
-      const response: AxiosResponse<MotionCustomField[]> = await ctx.api.requestWithRetry(() => ctx.api.client.get(url));
+      const response: AxiosResponse<MotionCustomField[]> = await ctx.api.requestWithRetry(() => ctx.api.client.get(url, BETA_REQUEST_CONFIG));
 
       // Beta API returns direct array, not wrapped
       const fieldsArray = response.data || [];
@@ -70,7 +75,7 @@ export async function createCustomField(ctx: ResourceContext, workspaceId: strin
     const minimalPayload = createMinimalPayload(apiPayload);
 
     const response: AxiosResponse<MotionCustomField> = await ctx.api.requestWithRetry(() =>
-      ctx.api.client.post(`/beta/workspaces/${workspaceId}/custom-fields`, minimalPayload)
+      ctx.api.client.post(`/beta/workspaces/${workspaceId}/custom-fields`, minimalPayload, BETA_REQUEST_CONFIG)
     );
 
     // Invalidate cache after successful creation
@@ -106,7 +111,7 @@ export async function deleteCustomField(ctx: ResourceContext, workspaceId: strin
     });
 
     await ctx.api.requestWithRetry(() =>
-      ctx.api.client.delete(`/beta/workspaces/${workspaceId}/custom-fields/${fieldId}`)
+      ctx.api.client.delete(`/beta/workspaces/${workspaceId}/custom-fields/${fieldId}`, BETA_REQUEST_CONFIG)
     );
 
     // Invalidate cache after successful deletion
@@ -163,7 +168,7 @@ export async function addCustomFieldToProject(ctx: ResourceContext, projectId: s
     }
 
     const response: AxiosResponse<MotionCustomFieldValue> = await ctx.api.requestWithRetry(() =>
-      ctx.api.client.post(`/beta/custom-field-values/project/${projectId}`, requestData)
+      ctx.api.client.post(`/beta/custom-field-values/project/${projectId}`, requestData, BETA_REQUEST_CONFIG)
     );
 
     // Invalidate project cache broadly — the API response is { type, value },
@@ -199,7 +204,7 @@ export async function removeCustomFieldFromProject(ctx: ResourceContext, project
     });
 
     await ctx.api.requestWithRetry(() =>
-      ctx.api.client.delete(`/beta/custom-field-values/project/${projectId}/custom-fields/${valueId}`)
+      ctx.api.client.delete(`/beta/custom-field-values/project/${projectId}/custom-fields/${valueId}`, BETA_REQUEST_CONFIG)
     );
 
     // Invalidate all project caches since we don't have workspace context here
@@ -256,7 +261,7 @@ export async function addCustomFieldToTask(ctx: ResourceContext, taskId: string,
     }
 
     const response: AxiosResponse<MotionCustomFieldValue> = await ctx.api.requestWithRetry(() =>
-      ctx.api.client.post(`/beta/custom-field-values/task/${taskId}`, requestData)
+      ctx.api.client.post(`/beta/custom-field-values/task/${taskId}`, requestData, BETA_REQUEST_CONFIG)
     );
 
     mcpLog(LOG_LEVELS.INFO, 'Custom field added to task successfully', {
@@ -288,7 +293,7 @@ export async function removeCustomFieldFromTask(ctx: ResourceContext, taskId: st
     });
 
     await ctx.api.requestWithRetry(() =>
-      ctx.api.client.delete(`/beta/custom-field-values/task/${taskId}/custom-fields/${valueId}`)
+      ctx.api.client.delete(`/beta/custom-field-values/task/${taskId}/custom-fields/${valueId}`, BETA_REQUEST_CONFIG)
     );
 
     mcpLog(LOG_LEVELS.INFO, 'Custom field removed from task successfully', {

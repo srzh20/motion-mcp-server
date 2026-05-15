@@ -7,7 +7,7 @@
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 import { z } from 'zod';
-import { LOG_LEVELS, RETRY_CONFIG, API_CONFIG } from '../../utils/constants';
+import { LOG_LEVELS, RETRY_CONFIG, API_CONFIG, MOTION_BASE_URLS } from '../../utils/constants';
 import { mcpLog } from '../../utils/logger';
 import { TruncationInfo } from '../../types/mcp';
 import { MotionApiErrorResponse } from '../../types/motion';
@@ -37,7 +37,7 @@ export class ApiClient implements IApiClient {
       throw new Error('MOTION_API_KEY environment variable is required');
     }
 
-    const baseUrl = 'https://api.usemotion.com/v1';
+    const baseUrl = MOTION_BASE_URLS.V1;
 
     mcpLog(LOG_LEVELS.INFO, 'Initializing Motion API service', {
       component: 'MotionApiService',

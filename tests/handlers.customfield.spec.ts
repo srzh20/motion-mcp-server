@@ -6,10 +6,24 @@ import type { MotionCustomFieldsArgs } from '../src/types/mcp-tool-args';
 function makeContext() {
   const motionService = {
     getCustomFields: vi.fn().mockResolvedValue([
-      { id: 'cf1', name: 'Priority Score', field: 'number' },
-      { id: 'cf2', name: 'Category', field: 'select', metadata: { options: ['A', 'B', 'C'] } },
+      { id: 'cf1', field: { id: 'cf1', name: 'Priority Score', type: 'number' } },
+      {
+        id: 'cf2',
+        field: {
+          id: 'cf2',
+          name: 'Category',
+          type: 'select',
+          metadata: {
+            options: [
+              { id: 'opt-a', value: 'A' },
+              { id: 'opt-b', value: 'B' },
+              { id: 'opt-c', value: 'C' },
+            ],
+          },
+        },
+      },
     ]),
-    createCustomField: vi.fn().mockResolvedValue({ id: 'cf3', name: 'New Field', field: 'text' }),
+    createCustomField: vi.fn().mockResolvedValue({ id: 'cf3', field: { id: 'cf3', name: 'New Field', type: 'text' } }),
     deleteCustomField: vi.fn().mockResolvedValue(undefined),
     addCustomFieldToProject: vi.fn().mockResolvedValue(undefined),
     removeCustomFieldFromProject: vi.fn().mockResolvedValue(undefined),

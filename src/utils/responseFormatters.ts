@@ -406,10 +406,16 @@ export function formatCustomFieldList(fields: MotionCustomField[]): CallToolResu
   }
   
   const fieldFormatter = (field: MotionCustomField) => {
-    const name = field.name ? `${field.name} ` : '';
-    return `- ${name}ID: ${field.id} [Type: ${field.field}]`;
+    const def = field.field;
+    const lines = [`- ${def.name} [Type: ${def.type}] (fieldId: ${field.id})`];
+    const options = def.metadata?.options?.filter(o => !o.deletedTime) ?? [];
+    if (options.length > 0) {
+      const rendered = options.map(o => `${o.value} (optionId: ${o.id})`).join(', ');
+      lines.push(`    Options: ${rendered}`);
+    }
+    return lines.join('\n');
   };
-  
+
   return formatListResponse(fields, `Found ${fields.length} custom field${fields.length === 1 ? '' : 's'}`, fieldFormatter);
 }
 
@@ -417,14 +423,18 @@ export function formatCustomFieldList(fields: MotionCustomField[]): CallToolResu
  * Format single custom field response
  */
 export function formatCustomFieldDetail(field: MotionCustomField): CallToolResult {
-  const details = [
+  const def = field.field;
+  const lines: string[] = [
     `Custom field created successfully:`,
-    field.name ? `- Name: ${field.name}` : null,
+    `- Name: ${def.name}`,
     `- ID: ${field.id}`,
-    `- Type: ${field.field}`
-  ].filter(Boolean).join('\n');
-  
-  return formatMcpSuccess(details);
+    `- Type: ${def.type}`
+  ];
+  const options = def.metadata?.options?.filter(o => !o.deletedTime) ?? [];
+  if (options.length > 0) {
+    lines.push(`- Options: ${options.map(o => `${o.value} (optionId: ${o.id})`).join(', ')}`);
+  }
+  return formatMcpSuccess(lines.join('\n'));
 }
 
 /**

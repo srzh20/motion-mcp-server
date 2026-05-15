@@ -159,14 +159,32 @@ export const MotionCommentSchema = z.object({
   })
 });
 
-// Motion Custom Field schema - New schema for Custom Fields API
-export const MotionCustomFieldSchema = z.object({
+// Motion Custom Field schema — GET /beta/workspaces/{id}/custom-fields returns a
+// nested wrapper: { id, field: { id, name, type, metadata: { options: [...] } } }
+export const MotionCustomFieldOptionSchema = z.object({
   id: z.string(),
-  field: z.enum([
+  value: z.string(),
+  color: z.string().optional(),
+  deletedTime: z.string().nullable().optional()
+});
+
+export const MotionCustomFieldDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  workspaceId: z.string().optional(),
+  type: z.enum([
     'text', 'url', 'date', 'person', 'multiPerson',
     'phone', 'select', 'multiSelect', 'number',
     'email', 'checkbox', 'relatedTo'
-  ])
+  ]),
+  metadata: z.object({
+    options: z.array(MotionCustomFieldOptionSchema).optional()
+  }).passthrough().optional()
+});
+
+export const MotionCustomFieldSchema = z.object({
+  id: z.string(),
+  field: MotionCustomFieldDefinitionSchema
 });
 
 // Motion Recurring Task schema - Updated to match API structure (returns task instances)

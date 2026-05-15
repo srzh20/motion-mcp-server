@@ -68,6 +68,14 @@ export const API_CONFIG = {
   CONNECT_TIMEOUT_MS: 10000    // 10 seconds - connection establishment timeout
 } as const;
 
+// Motion API base URLs.
+// Stable v1 endpoints live under /v1; beta endpoints (custom fields) live at the root
+// — they are NOT served under /v1/beta. Mixing the two yields 404s.
+export const MOTION_BASE_URLS = {
+  V1: 'https://api.usemotion.com/v1',
+  BETA: 'https://api.usemotion.com'
+} as const;
+
 // Cache TTL configuration (in seconds)
 export const CACHE_TTL = {
   WORKSPACES: 600,    // 10 minutes
